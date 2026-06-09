@@ -2,7 +2,6 @@
 // dashboard.php
 session_start();
 
-// Security Guard: If a user isn't logged in, kick them back to the login screen
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit;
@@ -20,41 +19,38 @@ $role     = $_SESSION['user_role'];
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
         body { background: #f3f4f6; display: flex; min-height: 100vh; }
-        
-        /* Sidebar layout styling */
         .sidebar { width: 260px; background: #1e3a8a; color: white; padding: 25px; display: flex; flex-direction: column; }
         .sidebar h2 { font-size: 20px; margin-bottom: 30px; text-align: center; border-bottom: 1px solid #3b82f6; padding-bottom: 15px; }
         .sidebar a { color: #d1d5db; text-decoration: none; padding: 12px; display: block; border-radius: 6px; margin-bottom: 10px; font-size: 15px; }
         .sidebar a:hover, .sidebar a.active { background: #2563eb; color: white; }
         .logout-btn { margin-top: auto; background: #dc2626 !important; text-align: center; font-weight: bold; }
-        
-        /* Main dashboard container layout */
         .main-content { flex: 1; padding: 40px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .welcome-msg h1 { color: #111827; font-size: 24px; }
         .badge { padding: 6px 12px; border-radius: 50px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
         .badge-admin { background: #fef3c7; color: #d97706; }
         .badge-technician { background: #e0f2fe; color: #0369a1; }
         .badge-client { background: #dcfce7; color: #15803d; }
-        
         .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px; }
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .card h3 { color: #4b5563; font-size: 14px; text-transform: uppercase; margin-bottom: 10px; }
         .card p { font-size: 28px; font-weight: bold; color: #111827; }
-        
-        .action-zone { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-top: 30px; }
+        .action-zone { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-top: 20px; }
         .btn-primary { display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; transition: background 0.2s; }
         .btn-primary:hover { background: #1d4ed8; }
+        
+        /* Success Banner Style */
+        .success-alert { background: #dcfce7; border-left: 5px solid #15803d; color: #166534; padding: 15px; margin-bottom: 25px; border-radius: 4px; font-size: 15px; }
     </style>
 </head>
 <body>
 
     <div class="sidebar">
         <h2>Support Desk</h2>
-        <a href="#" class="active">🏠 Home Dashboard</a>
+        <a href="dashboard.php" class="active">🏠 Home Dashboard</a>
         <?php if ($role === 'client'): ?>
-            <a href="#">📝 Submit a Ticket</a>
-            <a href="#">history My Ticket History</a>
+            <a href="submit-ticket.php">📝 Submit a Ticket</a>
+            <a href="#">📋 My Ticket History</a>
         <?php else: ?>
             <a href="#">📂 Manage Tickets</a>
             <a href="#">📊 View Reports</a>
@@ -63,6 +59,13 @@ $role     = $_SESSION['user_role'];
     </div>
 
     <div class="main-content">
+        
+        <?php if (isset($_GET['status']) && $_GET['status'] === 'ticket_created'): ?>
+            <div class="success-alert">
+                🎉 <strong>Success!</strong> Your support ticket has been recorded and routed to our IT team. You can track its progress here.
+            </div>
+        <?php endif; ?>
+
         <div class="header">
             <div class="welcome-msg">
                 <h1>Welcome Back, <?php echo $username; ?>!</h1>
