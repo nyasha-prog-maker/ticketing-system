@@ -90,7 +90,7 @@ $role     = $_SESSION['user_role'];
             <div class="action-zone">
                 <h2>Need IT Assistance?</h2>
                 <p style="color: #6b7280; margin: 10px 0 20px 0;">Submit a ticket for portal lockouts, network connection drops, or equipment issues, and our team will get right on it.</p>
-                <a href="#" class="btn-primary">Create New Support Ticket</a>
+                <a href="submit-ticket.php" class="btn-primary">Create New Support Ticket</a>
             </div>
         <?php endif; ?>
     </div>
