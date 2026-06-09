@@ -19,15 +19,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $stmt->fetch();
 
         if ($user && password_verify($password_input, $user['password'])) {
-            // Password is correct! Set session variables
             $_SESSION['user_id']   = $user['id'];
             $_SESSION['username']  = $user['username'];
             $_SESSION['user_role'] = $user['role'];
 
-            // Redirect smoothly to the centralized dashboard
             header("Location: ../dashboard.php");
             exit;
-            
         } else {
             echo "<h1>Access Denied</h1>";
             echo "<p>Invalid credentials or incorrect access role selected.</p>";
