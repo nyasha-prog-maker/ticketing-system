@@ -1,14 +1,64 @@
 <?php
 // dashboard.php
 session_start();
+require_once 'config/db.php';
 
+// Security Guard: If a user isn't logged in, kick them back to the login screen
 if (!isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit;
 }
 
+$user_id  = $_SESSION['user_id'];
 $username = htmlspecialchars($_SESSION['username']);
 $role     = $_SESSION['user_role'];
+
+// Initialize counter variables
+$stat_1 = 0;
+$stat_2 = 0;
+$stat_3 = "100%"; // Default fallback string
+
+try {
+    // Fetch live metrics based on who is logged in
+    if ($role === 'admin') {
+        // 1. Total Open Tickets
+        $stmt1 = $pdo->query("SELECT COUNT(*) FROM tickets WHERE status = 'open'");
+        $stat_1 = $stmt1->fetchColumn();
+
+        // 2. Total Active Technicians in the system
+        $stmt2 = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'technician'");
+        $stat_2 = $stmt2->fetchColumn();
+
+        // 3. System Resolution Rate (Resolved vs Total Tickets)
+        $total_stmt = $pdo->query("SELECT COUNT(*) FROM tickets");
+        $total_tickets = $total_stmt->fetchColumn();
+        
+        if ($total_tickets > 0) {
+            $resolved_stmt = $pdo->query("SELECT COUNT(*) FROM tickets WHERE status = 'resolved'");
+            $resolved_tickets = $resolved_stmt->fetchColumn();
+            $stat_3 = round(($resolved_tickets / $total_tickets) * 180) . "%"; 
+            // Note: Using a basic ratio calculation for demo purposes
+        } else {
+            $stat_3 = "100%";
+        }
+
+    } elseif ($role === 'technician') {
+        // 1. Total Open Tickets globally awaiting attention
+        $stmt1 = $pdo->query("SELECT COUNT(*) FROM tickets WHERE status = 'open'");
+        $stat_1 = $stmt1->fetchColumn();
+
+        // 2. High & Urgent Priority Escalations
+        $stmt2 = $pdo->query("SELECT COUNT(*) FROM tickets WHERE priority IN ('high', 'urgent') AND status = 'open'");
+        $stat_2 = $stmt2->fetchColumn();
+
+        // 3. Total Closed/Resolved Tasks historical baseline
+        $stmt3 = $pdo->query("SELECT COUNT(*) FROM tickets WHERE status = 'resolved'");
+        $stat_3 = $stmt3->fetchColumn();
+    }
+} catch (\PDOException $e) {
+    // Soft failure: log error but don't crash the whole dashboard layout
+    error_log("Dashboard stats error: " . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -38,8 +88,6 @@ $role     = $_SESSION['user_role'];
         .action-zone { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-top: 20px; }
         .btn-primary { display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; transition: background 0.2s; }
         .btn-primary:hover { background: #1d4ed8; }
-        
-        /* Success Banner Style */
         .success-alert { background: #dcfce7; border-left: 5px solid #15803d; color: #166534; padding: 15px; margin-bottom: 25px; border-radius: 4px; font-size: 15px; }
     </style>
 </head>
@@ -50,7 +98,7 @@ $role     = $_SESSION['user_role'];
         <a href="dashboard.php" class="active">🏠 Home Dashboard</a>
         <?php if ($role === 'client'): ?>
             <a href="submit-ticket.php">📝 Submit a Ticket</a>
-            <a href="#">📋 My Ticket History</a>
+            <a href="history.php">📋 My Ticket History</a>
         <?php else: ?>
             <a href="#">📂 Manage Tickets</a>
             <a href="#">📊 View Reports</a>
@@ -78,16 +126,16 @@ $role     = $_SESSION['user_role'];
         <?php if ($role === 'admin'): ?>
             <h2>System-Wide Console Management</h2>
             <div class="card-grid">
-                <div class="card"><h3>Total Open Tickets</h3><p>24</p></div>
-                <div class="card"><h3>Active Technicians</h3><p>5</p></div>
-                <div class="card"><h3>System Performance</h3><p>99.8%</p></div>
+                <div class="card"><h3>Total Open Tickets</h3><p><?php echo $stat_1; ?></p></div>
+                <div class="card"><h3>Active Technicians</h3><p><?php echo $stat_2; ?></p></div>
+                <div class="card"><h3>System Performance</h3><p><?php echo $stat_3; ?></p></div>
             </div>
         <?php elseif ($role === 'technician'): ?>
             <h2>Technician Assignment Workspace</h2>
             <div class="card-grid">
-                <div class="card"><h3>Assigned To Me</h3><p>4</p></div>
-                <div class="card"><h3>Pending Verification</h3><p>2</p></div>
-                <div class="card"><h3>My Resolved Tickets</h3><p>18</p></div>
+                <div class="card"><h3>Global Open Tickets</h3><p><?php echo $stat_1; ?></p></div>
+                <div class="card"><h3>Urgent Escalations</h3><p><?php echo $stat_2; ?></p></div>
+                <div class="card"><h3>Total System Resolved</h3><p><?php echo $stat_3; ?></p></div>
             </div>
         <?php else: ?>
             <div class="action-zone">
