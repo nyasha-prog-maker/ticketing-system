@@ -8,13 +8,23 @@ if (!isset($_SESSION['user_id']) || !in_array($_SESSION['user_role'], ['admin', 
 }
 
 $username = htmlspecialchars($_SESSION['username']);
-$role     = $_SESSION['user_role'];
+$current_role = $_SESSION['user_role'];
+$current_user_id = $_SESSION['user_id'];
 
 try {
+    // 1. Fetch all available technicians for the assignment dropdown engine
+    $tech_stmt = $pdo->query("SELECT id, username FROM users WHERE user_role = 'technician' ORDER BY username ASC");
+    $technicians = $tech_stmt->fetchAll();
+
+    // 2. Query all tickets with client name, category name, and assigned tech name
     $stmt = $pdo->query("
-        SELECT tickets.*, users.username AS student_name, categories.name AS category_name 
+        SELECT tickets.*, 
+               u1.username AS student_name, 
+               u2.username AS tech_name,
+               categories.name AS category_name 
         FROM tickets 
-        LEFT JOIN users ON tickets.client_id = users.id 
+        LEFT JOIN users u1 ON tickets.client_id = u1.id 
+        LEFT JOIN users u2 ON tickets.assigned_to = u2.id
         LEFT JOIN categories ON tickets.category_id = categories.id 
         ORDER BY tickets.id DESC
     ");
@@ -29,7 +39,6 @@ try {
     <meta charset="UTF-8">
     <title>Manage Tickets - Support Desk</title>
     <style>
-        /* Exact same styling as before */
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
         body { background: #f3f4f6; display: flex; min-height: 100vh; }
         .sidebar { width: 260px; background: #1e3a8a; color: white; padding: 25px; display: flex; flex-direction: column; }
@@ -48,15 +57,19 @@ try {
         .priority-medium { background: #e0f2fe; color: #0369a1; }
         .priority-high { background: #ffedd5; color: #c2410c; }
         .priority-urgent { background: #fee2e2; color: #991b1b; }
-        .status-open { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
         .status-resolved { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
-        .btn-resolve { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 12px; }
+        .btn-resolve { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 12px; display: inline-block; margin-top: 5px; }
         .btn-resolve:hover { background: #059669; }
         .description-text { font-size: 13px; color: #4b5563; margin-top: 5px; display: block; background: #f9fafb; padding: 8px; border-radius: 4px; border-left: 3px solid #d1d5db; }
-        
-        /* New Attachment Link Style */
         .attachment-link { display: inline-block; margin-top: 8px; font-size: 12px; color: #2563eb; text-decoration: none; font-weight: bold; background: #e0f2fe; padding: 4px 8px; border-radius: 4px; }
-        .attachment-link:hover { background: #bae6fd; }
+        .success-alert { background: #dcfce7; border-left: 5px solid #15803d; color: #166534; padding: 15px; margin-bottom: 25px; border-radius: 4px; font-size: 15px; }
+        
+        /* Inline Form styling for assignments */
+        .assign-form { display: flex; gap: 6px; margin-top: 5px; }
+        .assign-select { padding: 4px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; }
+        .btn-assign { background: #2563eb; color: white; border: none; padding: 4px 8px; font-size: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-assign:hover { background: #1d4ed8; }
+        .assignment-info { font-size: 12px; color: #4b5563; display: block; margin-bottom: 5px; }
     </style>
 </head>
 <body>
@@ -69,18 +82,25 @@ try {
     </div>
 
     <div class="main-content">
+        <?php if (isset($_GET['action']) && $_GET['action'] === 'assigned'): ?>
+            <div class="success-alert">✓ <strong>Workload Updated:</strong> Ticket ownership assignment successfully updated.</div>
+        <?php endif; ?>
+        <?php if (isset($_GET['action']) && $_GET['action'] === 'resolved'): ?>
+            <div class="success-alert">✓ <strong>Status Updated:</strong> Ticket state marked as resolved.</div>
+        <?php endif; ?>
+
         <div class="container">
             <h1>Global Ticket Management Console</h1>
-            <p>Review active incidents, technical system failure logs, and resolve issues.</p>
+            <p>Review active system incidents, view uploaded documentation screenshots, and assign work ownership.</p>
             
             <table>
                 <thead>
                     <tr>
                         <th style="width: 8%;">ID</th>
                         <th style="width: 15%;">Submitted By</th>
-                        <th style="width: 40%;">Issue Details</th>
-                        <th style="width: 15%;">Category</th>
-                        <th style="width: 10%;">Priority</th>
+                        <th style="width: 35%;">Issue Details</th>
+                        <th style="width: 12%;">Category</th>
+                        <th style="width: 18%;">Task Assignment</th>
                         <th style="width: 12%;">Actions</th>
                     </tr>
                 </thead>
@@ -92,15 +112,31 @@ try {
                             <td>
                                 <strong><?php echo htmlspecialchars($ticket['title']); ?></strong>
                                 <span class="description-text"><?php echo htmlspecialchars($ticket['description']); ?></span>
-                                
                                 <?php if (!empty($ticket['screenshot_path'])): ?>
-                                    <a href="<?php echo htmlspecialchars($ticket['screenshot_path']); ?>" target="_blank" class="attachment-link">
-                                        🖼️ View Screenshot
-                                    </a>
+                                    <a href="<?php echo htmlspecialchars($ticket['screenshot_path']); ?>" target="_blank" class="attachment-link">🖼️ View Screenshot</a>
                                 <?php endif; ?>
                             </td>
                             <td><?php echo htmlspecialchars($ticket['category_name'] ?? 'Uncategorized'); ?></td>
-                            <td><span class="badge priority-<?php echo $ticket['priority']; ?>"><?php echo $ticket['priority']; ?></span></td>
+                            <td>
+                                <span class="assignment-info">
+                                    👤 Assigned: <strong><?php echo htmlspecialchars($ticket['tech_name'] ?? 'Unassigned'); ?></strong>
+                                </span>
+                                
+                                <?php if ($current_role === 'admin' && $ticket['status'] === 'open'): ?>
+                                    <form method="POST" action="actions/assign-ticket.php" class="assign-form">
+                                        <input type="hidden" name="ticket_id" value="<?php echo $ticket['id']; ?>">
+                                        <select name="technician_id" class="assign-select">
+                                            <option value="">-- Nobody --</option>
+                                            <?php foreach ($technicians as $tech): ?>
+                                                <option value="<?php echo $tech['id']; ?>" <?php echo ($ticket['assigned_to'] == $tech['id']) ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars($tech['username']); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <button type="submit" class="btn-assign">Assign</button>
+                                    </form>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <?php if ($ticket['status'] === 'open'): ?>
                                     <a href="actions/update-ticket-status.php?id=<?php echo $ticket['id']; ?>&status=resolved" class="btn-resolve">Mark Resolved</a>
