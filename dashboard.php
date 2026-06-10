@@ -100,8 +100,8 @@ try {
             <a href="submit-ticket.php">📝 Submit a Ticket</a>
             <a href="history.php">📋 My Ticket History</a>
         <?php else: ?>
-            <a href="#">📂 Manage Tickets</a>
-            <a href="#">📊 View Reports</a>
+            <a href="manage-tickets.php">📂 Manage Tickets</a>
+            <a href="view-reports.php">📊 View Reports</a>
         <?php endif; ?>
         <a href="actions/logout.php" class="logout-btn">🚪 Sign Out</a>
     </div>
