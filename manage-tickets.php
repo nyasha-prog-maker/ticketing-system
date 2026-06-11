@@ -2,6 +2,7 @@
 session_start();
 require_once 'config/db.php';
 
+// Guard: Only admins and technicians can view this workspace
 if (!isset($_SESSION['user_id']) || !in_array($_SESSION['user_role'], ['admin', 'technician'])) {
     header("Location: index.php");
     exit;
@@ -9,22 +10,43 @@ if (!isset($_SESSION['user_id']) || !in_array($_SESSION['user_role'], ['admin', 
 
 $username = htmlspecialchars($_SESSION['username']);
 $current_role = $_SESSION['user_role'];
+$current_user_id = $_SESSION['user_id'];
 
 try {
+    // 1. Fetch available technicians for the dropdown (Admins only need this)
     $tech_stmt = $pdo->query("SELECT id, username FROM users WHERE user_role = 'technician' ORDER BY username ASC");
     $technicians = $tech_stmt->fetchAll();
 
-    $stmt = $pdo->query("
-        SELECT tickets.*, 
-               u1.username AS student_name, 
-               u2.username AS tech_name,
-               categories.name AS category_name 
-        FROM tickets 
-        LEFT JOIN users u1 ON tickets.client_id = u1.id 
-        LEFT JOIN users u2 ON tickets.assigned_to = u2.id
-        LEFT JOIN categories ON tickets.category_id = categories.id 
-        ORDER BY tickets.id DESC
-    ");
+    // 2. Conditional SQL Engine: Filter view if user is a Technician
+    if ($current_role === 'technician') {
+        // Technicians only see tickets delegated explicitly to their user ID
+        $stmt = $pdo->prepare("
+            SELECT tickets.*, 
+                   u1.username AS student_name, 
+                   u2.username AS tech_name,
+                   categories.name AS category_name 
+            FROM tickets 
+            LEFT JOIN users u1 ON tickets.client_id = u1.id 
+            LEFT JOIN users u2 ON tickets.assigned_to = u2.id
+            LEFT JOIN categories ON tickets.category_id = categories.id 
+            WHERE tickets.assigned_to = :tech_id
+            ORDER BY tickets.id DESC
+        ");
+        $stmt->execute(['tech_id' => $current_user_id]);
+    } else {
+        // Administrators retain total global oversight across all logged issues
+        $stmt = $pdo->query("
+            SELECT tickets.*, 
+                   u1.username AS student_name, 
+                   u2.username AS tech_name,
+                   categories.name AS category_name 
+            FROM tickets 
+            LEFT JOIN users u1 ON tickets.client_id = u1.id 
+            LEFT JOIN users u2 ON tickets.assigned_to = u2.id
+            LEFT JOIN categories ON tickets.category_id = categories.id 
+            ORDER BY tickets.id DESC
+        ");
+    }
     $tickets = $stmt->fetchAll();
 } catch (\PDOException $e) {
     die("Database engine error: " . $e->getMessage());
@@ -50,9 +72,9 @@ try {
         th, td { padding: 14px; border-bottom: 1px solid #e5e7eb; font-size: 14px; text-align: left; }
         th { background: #f9fafb; color: #374151; font-weight: 600; text-transform: uppercase; font-size: 12px; }
         .badge { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; display: inline-block; }
-        .priority-low { background: #f3f4f6; color: #4b5563; }
         .status-resolved { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
         .btn-resolve { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 12px; display: inline-block; margin-top: 5px; }
+        .btn-resolve:hover { background: #059669; }
         .description-text { font-size: 13px; color: #4b5563; margin-top: 5px; display: block; background: #f9fafb; padding: 8px; border-radius: 4px; border-left: 3px solid #d1d5db; }
         .attachment-link { display: inline-block; margin-top: 8px; font-size: 12px; color: #2563eb; text-decoration: none; font-weight: bold; background: #e0f2fe; padding: 4px 8px; border-radius: 4px; }
         .asset-badge { display: inline-block; background: #f3f4f6; color: #111827; font-family: monospace; font-weight: bold; padding: 2px 6px; border-radius: 4px; border: 1px solid #d1d5db; font-size: 11px; margin-bottom: 5px; }
@@ -60,6 +82,7 @@ try {
         .assign-select { padding: 4px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; }
         .btn-assign { background: #2563eb; color: white; border: none; padding: 4px 8px; font-size: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
         .assignment-info { font-size: 12px; color: #4b5563; display: block; margin-bottom: 5px; }
+        .no-data { text-align: center; color: #6b7280; font-style: italic; padding: 20px 0; }
     </style>
 </head>
 <body>
@@ -74,8 +97,12 @@ try {
 
     <div class="main-content">
         <div class="container">
-            <h1>Global Ticket Management Console</h1>
-            <p>Review active system incidents, view hardware specifications, and delegate staff responsibilities.</p>
+            <h1><?php echo ($current_role === 'admin') ? 'Global Ticket Management Console' : 'My Personal Task Queue'; ?></h1>
+            <p>
+                <?php echo ($current_role === 'admin') 
+                    ? 'Review active institutional system incidents, manage infrastructure specifications, and delegate staff responsibilities.' 
+                    : 'Review and resolve technical support incidents allocated specifically to your handling queue.'; ?>
+            </p>
             
             <table>
                 <thead>
@@ -89,6 +116,11 @@ try {
                     </tr>
                 </thead>
                 <tbody>
+                    <?php if (empty($tickets)): ?>
+                        <tr>
+                            <td colspan="6" class="no-data">No active support tickets found in this scope.</td>
+                        </tr>
+                    <?php endif; ?>
                     <?php foreach ($tickets as $ticket): ?>
                         <tr>
                             <td>#<?php echo $ticket['id']; ?></td>
